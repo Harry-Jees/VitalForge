@@ -205,6 +205,39 @@ def get_goal_description(goal):
 # UI HELPERS
 # =========================================================
 
+def get_rounded_image(image_path, size=(64, 64), radius=None):
+    """
+    Load an image from image_path, crop/fit to size, apply a rounded or circular mask
+    with anti-aliasing, and return a Tkinter ImageTk.PhotoImage object.
+    """
+    import os
+    from PIL import Image, ImageDraw, ImageTk
+
+    if not os.path.exists(image_path):
+        return None
+
+    try:
+        img = Image.open(image_path).convert("RGBA")
+        scale = 4
+        w, h = size[0] * scale, size[1] * scale
+        img = img.resize((w, h), Image.Resampling.LANCZOS)
+        mask = Image.new("L", (w, h), 0)
+        draw = ImageDraw.Draw(mask)
+
+        if radius is None:
+            draw.ellipse((0, 0, w, h), fill=255)
+        else:
+            draw.rounded_rectangle((0, 0, w, h), radius=radius * scale, fill=255)
+
+        output = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        output.paste(img, (0, 0), mask)
+        output = output.resize(size, Image.Resampling.LANCZOS)
+        return ImageTk.PhotoImage(output)
+    except Exception as e:
+        print(f"Error creating rounded image from {image_path}: {e}")
+        return None
+
+
 def clear_frame(frame):
     """Remove all widgets from a Tkinter frame."""
 
@@ -236,4 +269,4 @@ def get_error_message(error):
     if error is None:
         return "An unknown error occurred."
 
-    return str(error)
+    return str(error)

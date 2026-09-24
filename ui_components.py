@@ -316,9 +316,9 @@ def create_combobox(parent, values):
     return combo
 
 
-def create_spinbox(parent, from_=0, to=1000, increment=1):
+def create_spinbox(parent, from_=0, to=1000, increment=1, width=None, **kwargs):
     """Numeric spinbox."""
-    return tk.Spinbox(
+    spin = tk.Spinbox(
         parent,
         from_=from_,
         to=to,
@@ -332,7 +332,11 @@ def create_spinbox(parent, from_=0, to=1000, increment=1):
         highlightbackground=BORDER_COLOR,
         highlightcolor=GREEN,
         buttonbackground=LIGHT_BROWN,
+        **kwargs,
     )
+    if width is not None:
+        spin.config(width=width)
+    return spin
 
 
 # =========================================================

@@ -641,6 +641,59 @@ def get_food_logs(user_id, log_date=None):
     )
 
 
+def delete_food_log(log_id, user_id):
+    """Delete a specific food log entry for a user."""
+    query = """
+        DELETE FROM food_logs
+        WHERE log_id = %s
+          AND user_id = %s
+    """
+
+    return execute_query(query, (log_id, user_id))
+
+
+def create_custom_food(
+    name,
+    serving_size,
+    calories,
+    protein_g=0,
+    carbohydrates_g=0,
+    fat_g=0,
+    fiber_g=0,
+    category="Custom"
+):
+    """Add a new custom food item to the database."""
+    query = """
+        INSERT INTO foods
+            (
+                name,
+                serving_size,
+                calories,
+                protein_g,
+                carbohydrates_g,
+                fat_g,
+                fiber_g,
+                category
+            )
+        VALUES
+            (%s, %s, %s, %s, %s, %s, %s, %s)
+    """
+
+    return execute_insert(
+        query,
+        (
+            name,
+            serving_size,
+            calories,
+            protein_g,
+            carbohydrates_g,
+            fat_g,
+            fiber_g,
+            category
+        )
+    )
+
+
 # ---------------------------------------------------------
 # Goal progress
 # ---------------------------------------------------------
@@ -650,31 +703,30 @@ def save_goal_progress(
     progress_value,
     progress_date=None
 ):
-    """Save or update a user's goal progress."""
+    """Save or update a user's goal progress percentage."""
     if progress_date is None:
         progress_date = date.today()
 
-    query = """
-        INSERT INTO goal_progress
-            (
-                user_id,
-                progress_date,
-                progress_value
-            )
-        VALUES
-            (%s, %s, %s)
-        ON DUPLICATE KEY UPDATE
-            progress_value = VALUES(progress_value)
-    """
-
-    return execute_query(
-        query,
-        (
-            user_id,
-            progress_date,
-            progress_value
-        )
-    )
+    try:
+        query = """
+            INSERT INTO goal_progress
+                (user_id, progress_date, progress_percentage)
+            VALUES
+                (%s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                progress_percentage = VALUES(progress_percentage)
+        """
+        return execute_query(query, (user_id, progress_date, progress_value))
+    except Exception:
+        query = """
+            INSERT INTO goal_progress
+                (user_id, progress_date, progress_value)
+            VALUES
+                (%s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                progress_value = VALUES(progress_value)
+        """
+        return execute_query(query, (user_id, progress_date, progress_value))
 
 
 def get_goal_progress(user_id, days=30):

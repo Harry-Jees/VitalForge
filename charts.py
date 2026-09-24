@@ -268,6 +268,54 @@ def create_goal_progress_chart(parent, progress_records):
 
 
 # =========================================================
+# GOAL PIE CHART
+# =========================================================
+
+def create_goal_pie_chart(parent, goal_name="Long-Term Goal", progress_percentage=0.0):
+    """
+    Donut / Pie chart visualizing percentage progress toward a long-term fitness goal.
+    """
+    figure = Figure(figsize=(3.6, 2.6), dpi=100)
+    figure.patch.set_facecolor(CARD_COLOR)
+    axis = figure.add_subplot(111)
+    axis.set_facecolor(CARD_COLOR)
+
+    try:
+        pct = max(0.0, min(100.0, float(progress_percentage or 0)))
+    except (ValueError, TypeError):
+        pct = 0.0
+
+    rem = max(0.0, 100.0 - pct)
+
+    if pct == 0 and rem == 0:
+        rem = 100.0
+
+    sizes = [pct, rem]
+    colors = [_C_GREEN, "#E5DFD5"]
+
+    wedges, _ = axis.pie(
+        sizes,
+        colors=colors,
+        startangle=90,
+        counterclock=False,
+        wedgeprops=dict(width=0.35, edgecolor=CARD_COLOR, linewidth=2),
+    )
+
+    axis.text(
+        0, 0, f"{pct:.0f}%\nCompleted",
+        ha="center", va="center",
+        color=DARK_GREEN, fontsize=11, fontweight="bold",
+    )
+
+    title_txt = (goal_name[:22] + "…") if len(goal_name) > 22 else goal_name
+    axis.set_title(title_txt, color=TEXT_COLOR, fontsize=10, fontweight="bold", pad=4)
+
+    axis.axis("equal")
+    figure.tight_layout(pad=0.5)
+    return _embed(figure, parent)
+
+
+# =========================================================
 # UTILITY
 # =========================================================
 
