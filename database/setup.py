@@ -1,6 +1,6 @@
 # database/setup.py
 # Vital Forge
-# Creates the MySQL database, tables, and initial application data.
+# Creates Vital Forge tables and initial application data in the configured database.
 
 import os
 import sys
@@ -29,20 +29,8 @@ from data import FOODS, WORKOUTS
 # ---------------------------------------------------------
 # CONNECTION
 # ---------------------------------------------------------
-
-def get_server_connection():
-    """Connect to MySQL without selecting the Vital Forge database."""
-
-    return mysql.connector.connect(
-        host=MYSQL_HOST,
-        port=MYSQL_PORT,
-        user=MYSQL_USER,
-        password=MYSQL_PASSWORD
-    )
-
-
 def get_database_connection():
-    """Connect directly to the Vital Forge database."""
+    """Connect directly to the configured Vital Forge database."""
 
     return mysql.connector.connect(
         host=MYSQL_HOST,
@@ -51,30 +39,6 @@ def get_database_connection():
         password=MYSQL_PASSWORD,
         database=MYSQL_DATABASE
     )
-
-
-# ---------------------------------------------------------
-# CREATE DATABASE
-# ---------------------------------------------------------
-
-def create_database():
-    """Create the Vital Forge database if it does not exist."""
-
-    connection = get_server_connection()
-    cursor = connection.cursor()
-
-    cursor.execute(
-        f"""
-        CREATE DATABASE IF NOT EXISTS `{MYSQL_DATABASE}`
-        CHARACTER SET utf8mb4
-        COLLATE utf8mb4_unicode_ci
-        """
-    )
-
-    connection.commit()
-
-    cursor.close()
-    connection.close()
 
 
 # ---------------------------------------------------------
@@ -120,13 +84,6 @@ def create_tables():
         statement = statement.strip()
 
         if not statement:
-            continue
-
-        # The database name is already selected through the connection.
-        if statement.upper().startswith("CREATE DATABASE"):
-            continue
-
-        if statement.upper().startswith("USE "):
             continue
 
         try:
@@ -290,17 +247,23 @@ def verify_seed_data():
     """Check that the required default data exists."""
 
     connection = get_database_connection()
-    cursor = connection.cursor()
+    cursor = connection.cursor(dictionary=True)
 
     cursor.execute(
-        "SELECT COUNT(*) FROM foods"
+        "SELECT COUNT(*) AS record_count FROM foods"
     )
-    food_count = cursor.fetchone()[0]
+    food_row = cursor.fetchone()
+    if food_row is None:
+        raise RuntimeError("Could not verify food records.")
+    food_count = int(food_row["record_count"])
 
     cursor.execute(
-        "SELECT COUNT(*) FROM workouts"
+        "SELECT COUNT(*) AS record_count FROM workouts"
     )
-    workout_count = cursor.fetchone()[0]
+    workout_row = cursor.fetchone()
+    if workout_row is None:
+        raise RuntimeError("Could not verify workout records.")
+    workout_count = int(workout_row["record_count"])
 
     cursor.close()
     connection.close()
@@ -334,21 +297,17 @@ def setup_database():
     print("VITAL FORGE DATABASE SETUP")
     print("=" * 55)
 
-    print("\n1. Creating database...")
-    create_database()
-    print("Database ready.")
-
-    print("\n2. Creating tables...")
+    print(f"\n1. Creating tables in {MYSQL_DATABASE}...")
     create_tables()
     print("Tables ready.")
 
-    print("\n3. Seeding foods...")
+    print("\n2. Seeding foods...")
     seed_foods()
 
-    print("\n4. Seeding workouts...")
+    print("\n3. Seeding workouts...")
     seed_workouts()
 
-    print("\n5. Verifying data...")
+    print("\n4. Verifying data...")
     verify_seed_data()
 
     print("\n" + "=" * 55)

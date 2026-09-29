@@ -2,11 +2,16 @@
 # Vital Forge
 # Material 3 Earthy Tone Palette + 8-Point Spacing.
 
+import os
+from configparser import ConfigParser
+from pathlib import Path
+
 # =========================================================
 # Application
 # =========================================================
 
 APP_NAME = "Vital Forge"
+
 
 WINDOW_WIDTH  = 1200
 WINDOW_HEIGHT = 750
@@ -92,11 +97,20 @@ RADIUS = 16
 # MySQL Configuration
 # =========================================================
 
-MYSQL_HOST     = "localhost"
-MYSQL_PORT     = 3306
-MYSQL_USER     = "root"
-MYSQL_PASSWORD = "student"
-MYSQL_DATABASE = "vitalforge"
+_LOCAL_SECRETS = ConfigParser(interpolation=None)
+_LOCAL_SECRETS.read(Path(__file__).with_name(".secrets.ini"), encoding="utf-8")
+
+MYSQL_HOST     = os.environ.get(
+	"MYSQL_HOST",
+	"vital-forge-bro-app.b.aivencloud.com"
+)
+MYSQL_PORT     = int(os.environ.get("MYSQL_PORT", "10380"))
+MYSQL_USER     = os.environ.get("MYSQL_USER", "avnadmin")
+MYSQL_PASSWORD = (
+	_LOCAL_SECRETS.get("mysql", "password", fallback="")
+	or os.environ.get("MYSQL_PASSWORD", "")
+)
+MYSQL_DATABASE = "defaultdb"
 
 
 # =========================================================

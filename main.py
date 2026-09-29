@@ -59,14 +59,12 @@ def main():
             WINDOW_HEIGHT
         )
 
+
         # Prevent the window from becoming too small.
         root.minsize(1000, 650)
 
-        # Start the main application.
+        # Keep the application instance alive for the lifetime of the window.
         app = VitalForgeApp(root)
-
-        # Keep a reference so the application object remains alive.
-        root.app = app
 
         # Close the application normally.
         root.protocol("WM_DELETE_WINDOW", root.destroy)

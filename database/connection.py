@@ -13,29 +13,6 @@ from config import (
 )
 
 
-def get_server_connection():
-    """
-    Connect to the MySQL server without selecting a database.
-
-    This is used when Vital Forge needs to create the
-    database for the first time.
-    """
-
-    try:
-        connection = mysql.connector.connect(
-            host=MYSQL_HOST,
-            port=MYSQL_PORT,
-            user=MYSQL_USER,
-            password=MYSQL_PASSWORD
-        )
-
-        return connection
-
-    except Error as error:
-        print("MySQL server connection failed:", error)
-        return None
-
-
 def get_database_connection():
     """
     Connect directly to the Vital Forge MySQL database.
