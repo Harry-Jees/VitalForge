@@ -1,4 +1,4 @@
-# database/setup.py
+﻿# database/setup.py
 # Vital Forge
 # Creates Vital Forge tables and initial application data in the configured database.
 
@@ -14,12 +14,13 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 import mysql.connector
+from database.supabase_credentials import CredentialRetrievalError
 
 from config import (
     MYSQL_HOST,
     MYSQL_PORT,
     MYSQL_USER,
-    MYSQL_PASSWORD,
+    get_mysql_password,
     MYSQL_DATABASE,
 )
 
@@ -31,74 +32,54 @@ from data import FOODS, WORKOUTS
 # ---------------------------------------------------------
 def get_database_connection():
     """Connect directly to the configured Vital Forge database."""
-
     return mysql.connector.connect(
         host=MYSQL_HOST,
         port=MYSQL_PORT,
         user=MYSQL_USER,
-        password=MYSQL_PASSWORD,
-        database=MYSQL_DATABASE
+        password=get_mysql_password(),
+        database=MYSQL_DATABASE,
+        autocommit=False,
+        connection_timeout=20,
     )
 
 
 # ---------------------------------------------------------
 # CREATE TABLES
 # ---------------------------------------------------------
-
 def create_tables():
     """Create all database tables using schema.sql."""
+    schema_path = os.path.join(PROJECT_ROOT, "database", "schema.sql")
 
-    schema_path = os.path.join(
-        PROJECT_ROOT,
-        "database",
-        "schema.sql"
-    )
-
-    with open(
-        schema_path,
-        "r",
-        encoding="utf-8"
-    ) as file:
+    with open(schema_path, "r", encoding="utf-8") as file:
         schema = file.read()
 
     connection = get_database_connection()
     cursor = connection.cursor()
 
-    # Remove SQL comments.
     cleaned_lines = []
-
     for line in schema.splitlines():
         stripped = line.strip()
-
         if stripped.startswith("--"):
             continue
-
         cleaned_lines.append(line)
 
     cleaned_schema = "\n".join(cleaned_lines)
-
-    # Split the schema into individual SQL statements.
     statements = cleaned_schema.split(";")
 
     for statement in statements:
         statement = statement.strip()
-
         if not statement:
             continue
 
         try:
             cursor.execute(statement)
-        except mysql.connector.Error as error:
-            print("\nSchema statement failed:")
-            print(statement[:250])
-            print(f"\nMySQL error: {error}\n")
-
+        except mysql.connector.Error:
+            print("\nSchema statement failed.")
             cursor.close()
             connection.close()
             raise
 
     connection.commit()
-
     cursor.close()
     connection.close()
 
@@ -106,10 +87,8 @@ def create_tables():
 # ---------------------------------------------------------
 # SEED FOODS
 # ---------------------------------------------------------
-
 def seed_foods():
     """Insert the default food library."""
-
     connection = get_database_connection()
     cursor = connection.cursor()
 
@@ -140,7 +119,6 @@ def seed_foods():
     """
 
     values = []
-
     for food in FOODS:
         values.append(
             (
@@ -155,28 +133,18 @@ def seed_foods():
             )
         )
 
-    cursor.executemany(
-        query,
-        values
-    )
-
+    cursor.executemany(query, values)
     connection.commit()
-
     cursor.close()
     connection.close()
-
-    print(
-        f"Foods seeded successfully: {len(values)}"
-    )
+    print(f"Foods seeded successfully: {len(values)}")
 
 
 # ---------------------------------------------------------
 # SEED WORKOUTS
 # ---------------------------------------------------------
-
 def seed_workouts():
     """Insert the default workout library."""
-
     connection = get_database_connection()
     cursor = connection.cursor()
 
@@ -207,10 +175,8 @@ def seed_workouts():
     """
 
     values = []
-
     for workout in WORKOUTS:
         goals = workout["goals"]
-
         values.append(
             (
                 workout["name"],
@@ -224,42 +190,28 @@ def seed_workouts():
             )
         )
 
-    cursor.executemany(
-        query,
-        values
-    )
-
+    cursor.executemany(query, values)
     connection.commit()
-
     cursor.close()
     connection.close()
-
-    print(
-        f"Workouts seeded successfully: {len(values)}"
-    )
+    print(f"Workouts seeded successfully: {len(values)}")
 
 
 # ---------------------------------------------------------
 # VERIFY SEEDING
 # ---------------------------------------------------------
-
 def verify_seed_data():
     """Check that the required default data exists."""
-
     connection = get_database_connection()
     cursor = connection.cursor(dictionary=True)
 
-    cursor.execute(
-        "SELECT COUNT(*) AS record_count FROM foods"
-    )
+    cursor.execute("SELECT COUNT(*) AS record_count FROM foods")
     food_row = cursor.fetchone()
     if food_row is None:
         raise RuntimeError("Could not verify food records.")
     food_count = int(food_row["record_count"])
 
-    cursor.execute(
-        "SELECT COUNT(*) AS record_count FROM workouts"
-    )
+    cursor.execute("SELECT COUNT(*) AS record_count FROM workouts")
     workout_row = cursor.fetchone()
     if workout_row is None:
         raise RuntimeError("Could not verify workout records.")
@@ -268,31 +220,21 @@ def verify_seed_data():
     cursor.close()
     connection.close()
 
-    print(
-        f"Food records in database: {food_count}"
-    )
-    print(
-        f"Workout records in database: {workout_count}"
-    )
+    print(f"Food records in database: {food_count}")
+    print(f"Workout records in database: {workout_count}")
 
     if food_count < 300:
-        raise RuntimeError(
-            "Database contains fewer than 300 foods."
-        )
+        raise RuntimeError("Database contains fewer than 300 foods.")
 
     if workout_count < 25:
-        raise RuntimeError(
-            "Database contains fewer than 25 workouts."
-        )
+        raise RuntimeError("Database contains fewer than 25 workouts.")
 
 
 # ---------------------------------------------------------
 # MAIN SETUP
 # ---------------------------------------------------------
-
 def setup_database():
     """Run the complete Vital Forge database setup."""
-
     print("=" * 55)
     print("VITAL FORGE DATABASE SETUP")
     print("=" * 55)
@@ -318,19 +260,13 @@ def setup_database():
 # ---------------------------------------------------------
 # RUN DIRECTLY
 # ---------------------------------------------------------
-
 if __name__ == "__main__":
     try:
         setup_database()
-
-    except mysql.connector.Error as error:
+    except CredentialRetrievalError as error:
+        print("\nSETUP ERROR:", error)
+    except mysql.connector.Error:
         print("\nMySQL ERROR:")
-        print(error)
-        print(
-            "\nCheck your MySQL server, username, password, "
-            "and settings in config.py."
-        )
-
-    except Exception as error:
-        print("\nSETUP ERROR:")
-        print(error)
+        print("Check your MySQL server and local configuration.")
+    except Exception:
+        print("\nSETUP ERROR. Check your local configuration and database availability.")

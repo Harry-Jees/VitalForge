@@ -2,9 +2,22 @@
 # Vital Forge
 # Material 3 Earthy Tone Palette + 8-Point Spacing.
 
+"""Application configuration and environment-driven database settings.
+
+Production secret handling:
+    - Local development: store runtime credentials in .secrets.ini next to this file.
+    - Packaged app: place the same .secrets.ini next to the generated executable.
+    - Never embed secrets in code or the executable itself.
+"""
+
 import os
+import sys
 from configparser import ConfigParser
 from pathlib import Path
+
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parent / ".env", override=False)
 
 # =========================================================
 # Application
@@ -97,20 +110,80 @@ RADIUS = 16
 # MySQL Configuration
 # =========================================================
 
-_LOCAL_SECRETS = ConfigParser(interpolation=None)
-_LOCAL_SECRETS.read(Path(__file__).with_name(".secrets.ini"), encoding="utf-8")
 
-MYSQL_HOST     = os.environ.get(
-	"MYSQL_HOST",
-	"vital-forge-bro-app.b.aivencloud.com"
+def _find_secrets_file() -> Path:
+    """Locate the local secrets file for either source or packaged execution."""
+    candidates = []
+
+    if getattr(sys, "frozen", False):
+        candidates.append(Path(sys.executable).resolve().parent / ".secrets.ini")
+
+    candidates.extend([
+        Path(__file__).resolve().parent / ".secrets.ini",
+        Path.cwd() / ".secrets.ini",
+    ])
+
+    for path in candidates:
+        if path.exists():
+            return path
+
+    return candidates[0]
+
+
+_LOCAL_SECRETS = ConfigParser(interpolation=None)
+_SECRETS_PATH = _find_secrets_file()
+_LOCAL_SECRETS.read(_SECRETS_PATH, encoding="utf-8")
+
+MYSQL_HOST = os.environ.get(
+    "MYSQL_HOST",
+    _LOCAL_SECRETS.get("mysql", "host", fallback="vital-forge-bro-app.b.aivencloud.com"),
 )
-MYSQL_PORT     = int(os.environ.get("MYSQL_PORT", "10380"))
-MYSQL_USER     = os.environ.get("MYSQL_USER", "avnadmin")
-MYSQL_PASSWORD = (
-	_LOCAL_SECRETS.get("mysql", "password", fallback="")
-	or os.environ.get("MYSQL_PASSWORD", "")
+MYSQL_PORT = int(
+    os.environ.get("MYSQL_PORT", _LOCAL_SECRETS.get("mysql", "port", fallback="10380"))
+)
+MYSQL_USER = os.environ.get(
+    "MYSQL_USER",
+    _LOCAL_SECRETS.get("mysql", "user", fallback="avnadmin"),
+)
+_ENV_MYSQL_PASSWORD = os.environ.get("MYSQL_PASSWORD")
+MYSQL_PASSWORD = _ENV_MYSQL_PASSWORD or _LOCAL_SECRETS.get(
+    "mysql", "password", fallback=""
 )
 MYSQL_DATABASE = "defaultdb"
+
+VITALFORGE_APP_API_KEY = os.environ.get("VITALFORGE_APP_API_KEY", "")
+VITALFORGE_FUNCTION_URL = os.environ.get(
+    "VITALFORGE_FUNCTION_URL",
+    "https://jzqfajacvwiedsobnwyg.supabase.co/functions/v1/get-vitalforge-key",
+)
+
+_REMOTE_MYSQL_PASSWORD = None
+
+
+def get_mysql_password():
+    """Resolve the server-side MySQL password, fetching it only when configured."""
+    global _REMOTE_MYSQL_PASSWORD
+
+    if VITALFORGE_APP_API_KEY:
+        if _REMOTE_MYSQL_PASSWORD is None:
+            from database.supabase_credentials import fetch_database_credential
+
+            _REMOTE_MYSQL_PASSWORD = fetch_database_credential(
+                VITALFORGE_APP_API_KEY,
+                VITALFORGE_FUNCTION_URL,
+            )
+        return _REMOTE_MYSQL_PASSWORD
+
+    if _ENV_MYSQL_PASSWORD:
+        return _ENV_MYSQL_PASSWORD
+
+    if MYSQL_PASSWORD:
+        return MYSQL_PASSWORD
+
+    raise RuntimeError(
+        "Missing MySQL password. Set MYSQL_PASSWORD, configure the Supabase "
+        "function key in .env, or provide a password in the local secrets file."
+    )
 
 
 # =========================================================

@@ -1,8 +1,10 @@
 # utils.py
 # Vital Forge - General Utilities
 
+import base64
 import hashlib
 import re
+import secrets
 from datetime import date, datetime, timedelta
 
 
@@ -11,17 +13,45 @@ from datetime import date, datetime, timedelta
 # =========================================================
 
 def hash_password(password):
-    """Convert a password into a secure SHA-256 hash."""
+    """Hash a password using PBKDF2-HMAC-SHA256 with a random salt."""
+    if password is None:
+        raise ValueError("Password cannot be empty.")
 
-    return hashlib.sha256(
-        password.encode("utf-8")
-    ).hexdigest()
+    password = str(password)
+    salt = secrets.token_bytes(16)
+    derived = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt,
+        200_000,
+    )
+    encoded_salt = base64.b64encode(salt).decode("ascii")
+    encoded_hash = base64.b64encode(derived).decode("ascii")
+    return f"pbkdf2_sha256$200000${encoded_salt}${encoded_hash}"
 
 
 def verify_password(password, password_hash):
-    """Check whether a password matches its stored hash."""
+    """Check whether a password matches a stored hash, including older SHA-256 entries."""
+    if not password or not password_hash:
+        return False
 
-    return hash_password(password) == password_hash
+    if password_hash.startswith("pbkdf2_sha256$"):
+        try:
+            algorithm, iterations_text, salt_b64, digest_b64 = password_hash.split("$")
+            iterations = int(iterations_text)
+            salt = base64.b64decode(salt_b64.encode("ascii"))
+            expected = base64.b64decode(digest_b64.encode("ascii"))
+            calculated = hashlib.pbkdf2_hmac(
+                "sha256",
+                password.encode("utf-8"),
+                salt,
+                iterations,
+            )
+            return secrets.compare_digest(calculated, expected)
+        except (TypeError, ValueError):
+            return False
+
+    return hashlib.sha256(password.encode("utf-8")).hexdigest() == password_hash
 
 
 # =========================================================
@@ -37,9 +67,20 @@ def is_valid_email(email):
 
 
 def is_valid_password(password):
-    """Check the minimum password requirement."""
+    """Require a minimally strong password for account creation."""
+    if not isinstance(password, str):
+        return False
 
-    return len(password) >= 6
+    if len(password) < 8:
+        return False
+
+    if not re.search(r"[A-Za-z]", password):
+        return False
+
+    if not re.search(r"\d", password):
+        return False
+
+    return True
 
 
 def is_valid_name(name):

@@ -187,8 +187,8 @@ class VitalForgeApp:
             if not test_connection():
                 self.show_error(
                     "Database",
-                    "Cannot connect to MySQL.\n\nPlease ensure MySQL is running "
-                    "and the database is set up (see guides/BUILD.md)."
+                    "Cannot connect to MySQL.\n\nPlease ensure MySQL is running and the "
+                    "database is set up as described in README.md."
                 )
                 return
             try:
@@ -267,7 +267,10 @@ class VitalForgeApp:
                 self.show_error("Registration", "Please enter a valid email address.")
                 return
             if not is_valid_password(pw):
-                self.show_error("Registration", "Password must be at least 6 characters.")
+                self.show_error(
+                    "Registration",
+                    "Password must be at least 8 characters and include letters and numbers.",
+                )
                 return
             if email == DEMO_EMAIL:
                 self.show_error("Registration", "That email is reserved for the demo account.")
@@ -481,6 +484,78 @@ class VitalForgeApp:
     # ─────────────────────────────────────────────────────
     # DEMO MODE
     # ─────────────────────────────────────────────────────
+
+    def _build_personalized_workout_plan(self, target_date=None):
+        """Create a workout recommendation from the user's profile and goals."""
+        if target_date is None:
+            target_date = getattr(self, "selected_workout_date", datetime.date.today())
+
+        schedule = WEEKLY_WORKOUT_SCHEDULE[target_date.weekday()]
+        if not schedule.get("exercises"):
+            return {
+                "name": "Recovery Day",
+                "description": "Light movement, mobility, and recovery-focused recovery work.",
+                "difficulty": "Beginner",
+                "completed": True,
+                "day": schedule["day"],
+                "focus": "Recovery and mobility",
+                "exercises": ["Mobility flow", "Easy walk", "Stretch and reset"],
+                "target_date": target_date,
+            }
+
+        goal = str((self.profile or {}).get("long_term_goal", "General fitness")).strip() or "General fitness"
+        activity = str((self.profile or {}).get("activity_level", "Moderately active")).strip() or "Moderately active"
+
+        goal_map = {
+            "Weight loss": {
+                "name": "Fat-Burning Circuit",
+                "focus": "Low-impact cardio and calorie burn",
+                "exercises": ["Brisk walking intervals", "Bodyweight squats", "Incline push-ups", "Plank holds"],
+            },
+            "Weight gain": {
+                "name": "Lean Mass Builder",
+                "focus": "Controlled strength and recovery",
+                "exercises": ["Goblet squats", "Incline push-ups", "Bent-over rows", "Rested lunges"],
+            },
+            "Muscular build": {
+                "name": "Strength Builder",
+                "focus": "Progressive strength and muscular control",
+                "exercises": ["Air squats", "Push-ups", "Rows", "Reverse lunges", "Core holds"],
+            },
+            "Endurance": {
+                "name": "Endurance Session",
+                "focus": "Steady aerobic work and stamina",
+                "exercises": ["Brisk march", "Step-ups", "Jumping jacks", "Wall sits", "Rowing motion"],
+            },
+            "General fitness": {
+                "name": "Balanced Fitness",
+                "focus": "Steady strength, movement quality, and conditioning",
+                "exercises": ["Dynamic warm-up", "Bodyweight squats", "Push-ups", "Core activation", "Easy cardio"],
+            },
+        }
+
+        recommendation = goal_map.get(goal, goal_map["General fitness"])
+        difficulty = "Beginner"
+        if activity in {"Very active", "Extremely active"}:
+            difficulty = "Intermediate"
+
+        exercises = list(recommendation["exercises"])
+        if activity in {"Sedentary", "Lightly active"}:
+            exercises = exercises[:3]
+
+        return {
+            "name": recommendation["name"],
+            "description": (
+                f"{schedule['day']} plan tailored for {goal.lower()} and a {activity.lower()} lifestyle. "
+                f"Focus on controlled effort and consistency."
+            ),
+            "difficulty": difficulty,
+            "completed": False,
+            "day": schedule["day"],
+            "focus": recommendation["focus"],
+            "exercises": exercises,
+            "target_date": target_date,
+        }
 
     def start_demo_mode(self):
         self.demo_mode = True
@@ -887,53 +962,38 @@ class VitalForgeApp:
         if target_date is None:
             target_date = getattr(self, "selected_workout_date", datetime.date.today())
 
-        scheduled = WEEKLY_WORKOUT_SCHEDULE[target_date.weekday()]
-
-        if not scheduled["exercises"]:
-            return {
-                "name": scheduled["focus"],
-                "description": "Take today as a recovery day. Light walking and mobility are optional.",
-                "difficulty": "Recovery",
-                "completed": True,
-                "day": scheduled["day"],
-                "focus": scheduled["focus"],
-                "exercises": [],
-                "target_date": target_date,
-            }
-
         if self.demo_mode:
             key = str(target_date)
             if key in self.demo_workout_history:
                 return self.demo_workout_history[key]
-            workout = {
-                "name": scheduled["focus"],
-                "description": f"{scheduled['day']}: complete all three exercises below.",
-                "difficulty": "Scheduled",
-                "completed": False,
-                "day": scheduled["day"],
-                "focus": scheduled["focus"],
-                "exercises": list(scheduled["exercises"]),
-                "target_date": target_date,
-            }
+
+            workout = self._build_personalized_workout_plan(target_date)
             self.demo_workout_history[key] = workout
             return workout
 
         existing = queries.get_today_workout(self.user_id, target_date)
         if not existing:
-            suitable = queries.get_all_workouts()
+            goal = (self.profile or {}).get("long_term_goal") or "General fitness"
+            suitable = queries.get_workouts_for_goal(goal)
+            if not suitable:
+                suitable = queries.get_all_workouts()
             if not suitable:
                 return None
             queries.assign_workout(self.user_id, suitable[0]["workout_id"], target_date)
             existing = queries.get_today_workout(self.user_id, target_date)
 
+        if not existing:
+            return None
+
+        scheduled = WEEKLY_WORKOUT_SCHEDULE[target_date.weekday()]
         workout = dict(existing)
         workout.update({
-            "name": scheduled["focus"],
-            "description": f"{scheduled['day']}: complete all three exercises below.",
-            "difficulty": "Scheduled",
+            "name": existing.get("name") or scheduled["focus"],
+            "description": existing.get("description") or f"{scheduled['day']}: complete the assigned workout plan.",
+            "difficulty": existing.get("difficulty") or "Scheduled",
             "day": scheduled["day"],
             "focus": scheduled["focus"],
-            "exercises": list(scheduled["exercises"]),
+            "exercises": list(scheduled.get("exercises", [])),
             "target_date": target_date,
         })
         return workout

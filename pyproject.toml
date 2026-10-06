@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "VitalForge"
+version = "1.0.0"
+description = "Desktop fitness tracking application for daily activity, nutrition, workouts, and progress monitoring."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Vital Forge Team" }]
+license = { text = "MIT" }
+keywords = ["fitness", "desktop", "tkinter", "mysql", "health"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Win32 :: Windows",
+    "Intended Audience :: End Users",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Scheduling",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+]
+dependencies = [
+    "mysql-connector-python",
+    "matplotlib",
+    "python-dotenv",
+    "httpx",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.black]
+line-length = 100
+
+[tool.ruff]
+line-length = 100

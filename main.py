@@ -10,6 +10,7 @@ import tkinter as tk
 from tkinter import messagebox
 
 from config import APP_NAME, WINDOW_WIDTH, WINDOW_HEIGHT
+from database.connection import check_database_connection
 from screens import VitalForgeApp
 
 
@@ -62,6 +63,16 @@ def main():
 
         # Prevent the window from becoming too small.
         root.minsize(1000, 650)
+
+        # Resolve the Supabase credential and verify MySQL before showing the app.
+        connected, connection_error = check_database_connection()
+        if not connected:
+            messagebox.showwarning(
+                "Database Unavailable",
+                "Vital Forge could not verify its database connection.\n\n"
+                f"{connection_error}",
+                parent=root,
+            )
 
         # Keep the application instance alive for the lifetime of the window.
         app = VitalForgeApp(root)

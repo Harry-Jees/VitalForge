@@ -1,3 +1,5 @@
 mysql-connector-python
 matplotlib
+python-dotenv
+httpx
 pytest
