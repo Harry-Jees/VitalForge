@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from config import (
+    FONT_FAMILY,
     BG_COLOR, CARD_COLOR, INPUT_COLOR,
     GREEN, DARK_GREEN, LIGHT_GREEN,
     BROWN, DARK_BROWN, LIGHT_BROWN,
@@ -393,14 +394,14 @@ class StatCard(tk.Frame):
         tk.Label(
             content, text=title.upper(),
             bg=CARD_COLOR, fg=MUTED_TEXT,
-            font=("Segoe UI", 8, "bold"), anchor="w",
+            font=(FONT_FAMILY, 8, "bold"), anchor="w",
         ).pack(fill="x")
 
         # Value
         tk.Label(
             content, text=value,
             bg=CARD_COLOR, fg=TEXT_COLOR,
-            font=("Segoe UI", 18, "bold"), anchor="w",
+            font=(FONT_FAMILY, 18, "bold"), anchor="w",
         ).pack(fill="x", pady=(SPACING_4, 0))
 
         # Subtitle

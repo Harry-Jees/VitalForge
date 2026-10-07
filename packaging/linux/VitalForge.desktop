@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=VitalForge
+Comment=Fitness tracking and progress
+Exec=VitalForge
+TryExec=VitalForge
+Icon=VitalForge
+Terminal=false
+Categories=Utility;Health;

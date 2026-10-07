@@ -9,7 +9,7 @@
 import tkinter as tk
 from tkinter import messagebox
 
-from config import APP_NAME, WINDOW_WIDTH, WINDOW_HEIGHT
+from config import APP_NAME, WINDOW_WIDTH, WINDOW_HEIGHT, resource_path
 from database.connection import check_database_connection
 from screens import VitalForgeApp
 
@@ -38,7 +38,7 @@ def handle_startup_error(error):
             "Vital Forge - Startup Error",
             "Vital Forge could not start.\n\n"
             f"Error: {error}\n\n"
-            "Please check the setup instructions in guides/BUILD.md."
+            "Please check the setup instructions in README.md."
         )
 
         error_window.destroy()
@@ -51,8 +51,12 @@ def main():
     """Start Vital Forge."""
     try:
         root = tk.Tk()
+        icon_image = tk.PhotoImage(
+            file=str(resource_path("assets/logo-rounded.png"))
+        )
 
         root.title(APP_NAME)
+        root.iconphoto(True, icon_image)
 
         center_window(
             root,

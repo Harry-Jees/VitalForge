@@ -4,10 +4,8 @@
 
 """Application configuration and environment-driven database settings.
 
-Production secret handling:
-    - Local development: store runtime credentials in .secrets.ini next to this file.
-    - Packaged app: place the same .secrets.ini next to the generated executable.
-    - Never embed secrets in code or the executable itself.
+Packaged builds include the local .env file in the executable archive; recipients
+can extract its credentials.
 """
 
 import os
@@ -17,7 +15,18 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).resolve().parent / ".env", override=False)
+_APP_DIR = Path(
+    getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent)
+    if getattr(sys, "frozen", False)
+    else Path(__file__).resolve().parent
+)
+load_dotenv(_APP_DIR / ".env", override=False)
+
+
+def resource_path(relative_path: str | Path) -> Path:
+    """Return a path to a bundled resource or a source-tree resource."""
+    return _APP_DIR / relative_path
+
 
 # =========================================================
 # Application
@@ -67,10 +76,10 @@ ERROR_COLOR   = "#B3261E"  # M3 Error
 
 
 # =========================================================
-# Fonts  (Segoe UI — Material 3 type scale)
+# Fonts (use Tk's platform-native default across operating systems)
 # =========================================================
 
-FONT_FAMILY = "Segoe UI"
+FONT_FAMILY = "TkDefaultFont"
 
 FONT_SMALL      = (FONT_FAMILY, 9)
 FONT_BODY       = (FONT_FAMILY, 10)

@@ -1,8 +1,10 @@
 ﻿# database/connection.py
 # Vital Forge - MySQL Connection
 
-import mysql.connector
+from threading import Lock
+
 from mysql.connector import Error
+from mysql.connector.pooling import MySQLConnectionPool
 
 from database.supabase_credentials import CredentialRetrievalError
 from config import (
@@ -13,21 +15,34 @@ from config import (
     MYSQL_DATABASE,
 )
 
+_connection_pool = None
+_pool_lock = Lock()
+
 
 def _open_database_connection():
-    return mysql.connector.connect(
-        host=MYSQL_HOST,
-        port=MYSQL_PORT,
-        user=MYSQL_USER,
-        password=get_mysql_password(),
-        database=MYSQL_DATABASE,
-        autocommit=False,
-        connection_timeout=20,
-    )
+    global _connection_pool
+
+    if _connection_pool is None:
+        with _pool_lock:
+            if _connection_pool is None:
+                _connection_pool = MySQLConnectionPool(
+                    pool_name="vitalforge",
+                    pool_size=1,
+                    pool_reset_session=False,
+                    host=MYSQL_HOST,
+                    port=MYSQL_PORT,
+                    user=MYSQL_USER,
+                    password=get_mysql_password(),
+                    database=MYSQL_DATABASE,
+                    autocommit=True,
+                    connection_timeout=20,
+                )
+
+    return _connection_pool.get_connection()
 
 
 def get_database_connection():
-    """Connect directly to the Vital Forge MySQL database."""
+    """Get a connection from the application's MySQL pool."""
     try:
         return _open_database_connection()
     except (CredentialRetrievalError, RuntimeError):

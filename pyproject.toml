@@ -13,10 +13,11 @@ license = { text = "MIT" }
 keywords = ["fitness", "desktop", "tkinter", "mysql", "health"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
-    "Environment :: Win32 :: Windows",
     "Intended Audience :: End Users",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
     "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -27,6 +28,7 @@ classifiers = [
 dependencies = [
     "mysql-connector-python",
     "matplotlib",
+    "pillow",
     "python-dotenv",
     "httpx",
 ]

@@ -1,5 +1,7 @@
 mysql-connector-python
 matplotlib
+pillow
 python-dotenv
 httpx
 pytest
+pyinstaller>=6.0

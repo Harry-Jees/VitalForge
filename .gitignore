@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.secrets.ini
+/build/
+/dist/VitalForge/
+/dist/VitalForge.app/
+/dist/packages/

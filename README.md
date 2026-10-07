@@ -9,7 +9,7 @@ Vital Forge is a desktop fitness-tracking application built with Python and Tkin
 - Goals for water intake, sleep, and steps
 - Progress charts using Matplotlib
 - Local credential file for MySQL access outside the source code
-- Desktop packaging for Windows via PyInstaller
+- Native desktop packages for Windows, macOS, Debian-based Linux, and other Linux distributions
 
 ## Tech stack
 
@@ -34,70 +34,33 @@ VitalForge/
 ├── pyproject.toml
 ├── README.md
 ├── VitalForge.spec
-├── .secrets.example.ini
-├── .env.example
 ├── database/
 │   ├── connection.py
 │   ├── schema.sql
 │   ├── setup.py
 │   └── queries.py
-├── tests/
-│   └── test_database_config.py
 ├── assets/
-│   └── logo.png
-└── dist/
-    └── VitalForge.exe   # generated package output
+│   ├── logo.png
+│   ├── logo-rounded.png
+│   ├── logo.ico
+│   └── logo.icns
+├── packaging/
+│   └── linux/            # Debian and AppImage packaging files
+└── dist/                 # generated build output
 ```
 
-## Credential storage
+## Configuration and credentials
 
-Keep all runtime database credentials in a local file named `.secrets.ini`.
+The app reads runtime configuration from a local `.env` file, environment
+variables, or (for direct database access) a `.secrets.ini` file. Supply your
+own configuration locally; do not put credentials in source control or public
+documentation. The package build expects `.env` to be present locally and
+includes it in the application package. It is not encrypted; anyone receiving
+a package can extract its contents. Do not distribute packages containing
+private credentials.
 
-Where to store it:
-- Local development: `<repo>/.secrets.ini`
-- Packaged app: place `.secrets.ini` next to the generated executable (`dist/VitalForge.exe`)
-
-Use `.secrets.example.ini` as the template:
-
-```ini
-[mysql]
-host = your-aiven-host.example.com
-port = 10380
-user = avnadmin
-password = replace-with-your-rotated-aiven-password
-```
-
-Important:
-- Do not commit `.secrets.ini`.
-- Do not hard-code credentials into the source code.
-- Do not bundle the secret file into the executable.
-- These secret files are not excluded by a `.gitignore`; keep them local and
-  do not stage or commit them.
-
-The Supabase function settings are loaded from `.env` using `python-dotenv`.
-Copy `.env.example` to `.env` and add the private `VITALFORGE_APP_API_KEY`
-locally. The function URL is configurable with `VITALFORGE_FUNCTION_URL`.
-Do not distribute `.env` or bundle its key with the desktop application; secrets
-shipped to client machines can be extracted.
-
-The backend calls the function with `GET`, sends the key in the `x-api-key`
-header, and sends no request body. It expects a successful JSON response with
-a non-empty string `credential` field. That credential is used only for
-server-side MySQL connections. When `VITALFORGE_APP_API_KEY` is configured,
-the function credential takes precedence over local password settings. Without
-the function key, the app uses `MYSQL_PASSWORD` or the local `.secrets.ini`
-password. At app startup the database connection is checked before the login
-screen appears; a safe warning is shown if it is unavailable.
-
-The function source supplied for this setup checks `x-api-key` itself, but the
-deployed Supabase gateway also has JWT verification enabled. With no valid
-Supabase JWT configured in this desktop app, the gateway can reject the GET
-before it reaches the function. To use only the private app key, the function
-must have platform JWT verification disabled (for example,
-`[functions.get-vitalforge-key] verify_jwt = false` in `supabase/config.toml`)
-while keeping the function's constant-time `x-api-key` check and required
-function secrets. No deployed configuration was changed; approval and the
-appropriate Supabase-side change are still required.
+At startup, the app checks database connectivity and displays a warning if the
+database is unavailable.
 
 ## Setup
 
@@ -108,44 +71,77 @@ appropriate Supabase-side change are still required.
 python -m pip install -r requirements.txt
 ```
 
-3. Create your local secret file:
+3. Create and configure `.env` locally. Do not share a built package containing
+   private credentials.
 
-```bash
-copy .secrets.example.ini .secrets.ini
-```
-
-Then update the file with your real MySQL credentials.
-
-4. Create `.env` from `.env.example` and add the private function API key.
-
-5. Run the database bootstrap if needed:
+4. Run the database bootstrap if needed:
 
 ```bash
 python database/setup.py
 ```
 
-6. Launch the app:
+5. Launch the app:
 
 ```bash
 python main.py
 ```
 
-## Build for Windows EXE
+## Build desktop packages
 
-From the project root:
+Build on the platform you are targeting. PyInstaller does not cross-compile
+between operating systems, so Windows, macOS, and Linux packages must each be
+built on that operating system. The build uses the platform's bundled logo and
+includes the local `.env` in the package. It is not encrypted.
+
+### Windows
+
+The Windows build was rebuilt and verified in this workspace. To rebuild on
+Windows, install Python dependencies and run:
 
 ```powershell
-python -m PyInstaller --noconfirm --clean --onefile --windowed --name VitalForge --add-data "assets;assets" main.py
+python -m pip install -r requirements.txt
+python -m PyInstaller --noconfirm --clean VitalForge.spec
 ```
 
-The packaged executable is created in `dist/VitalForge.exe`.
+The single-file executable is created at `dist/VitalForge.exe`.
+
+### macOS
+
+The macOS build configuration is present but has not been built or verified on
+a Mac. Build it on macOS after installing the Python dependencies:
+
+```bash
+python3 -m pip install -r requirements.txt
+python3 -m PyInstaller --noconfirm --clean VitalForge.spec
+```
+
+The expected output is `dist/VitalForge.app`. Build and verify separately on
+each Mac architecture you intend to support.
+
+### Debian-based and other Linux distributions
+
+Linux packaging configuration is present but has not been built or verified
+on Linux. On a Linux host, install Python, Tkinter, project dependencies, and
+PyInstaller. To build a Debian package, `dpkg-deb` is also required. To build
+an AppImage, install `linuxdeploy` and `appimagetool` to bundle shared-library
+dependencies. Then run:
+
+```bash
+python3 -m pip install -r requirements.txt
+sh packaging/linux/build.sh all
+```
+
+The outputs are written to `dist/packages/`. Use `deb` to build only the
+Debian package or `appimage` to build only the AppImage. AppImages are built
+for the host architecture (`x86_64` or `aarch64`); build on each target
+architecture and test on each Linux distribution you intend to support.
 
 ## Production notes
 
 - The app uses a fixed MySQL database name: `defaultdb`.
 - It does not create or rename the database during setup.
-- Local credentials are loaded from `.secrets.ini` or environment variables (`MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`).
-- If the password is missing, the app fails fast with a clear error instead of failing later during a database call.
+- Local database settings may be supplied in `.secrets.ini` or through environment variables.
+- If configuration is missing, the app reports the database connection problem at startup.
 
 ## Testing
 

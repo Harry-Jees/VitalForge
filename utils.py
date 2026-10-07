@@ -3,6 +3,7 @@
 
 import base64
 import hashlib
+import math
 import re
 import secrets
 from datetime import date, datetime, timedelta
@@ -176,6 +177,33 @@ def clamp(value, minimum, maximum):
     """Keep a number inside a specified range."""
 
     return max(minimum, min(value, maximum))
+
+
+def calculate_bmi(weight_kg, height_cm):
+    """Calculate BMI from kilograms and centimeters, returning None for invalid input."""
+    try:
+        weight = float(weight_kg)
+        height_m = float(height_cm) / 100
+    except (TypeError, ValueError):
+        return None
+
+    if not math.isfinite(weight) or not math.isfinite(height_m) or weight <= 0 or height_m <= 0:
+        return None
+
+    return weight / (height_m * height_m)
+
+
+def get_bmi_category(bmi):
+    """Classify BMI using standard adult screening cutoffs."""
+    if bmi is None:
+        return "Enter valid height and weight"
+    if bmi < 18.5:
+        return "Underweight"
+    if bmi < 25:
+        return "Normal Weight"
+    if bmi < 30:
+        return "Overweight"
+    return "Obese"
 
 
 def percentage(current, target):

@@ -1,9 +1,10 @@
 # charts.py
 # Vital Forge — Matplotlib Charts
 
-import tkinter as tk
+import math
 from datetime import date, timedelta
 
+import matplotlib.dates as mdates
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
@@ -61,6 +62,12 @@ def _empty_message(axis, message):
     axis.set_yticks([])
 
 
+def _as_date(value):
+    if hasattr(value, "date"):
+        return value.date()
+    return value
+
+
 # =========================================================
 # WORKOUT COMPLETION CHART
 # =========================================================
@@ -80,21 +87,44 @@ def create_workout_completion_chart(parent, records):
 
     lookup = {}
     for r in records:
-        d = r.get("assignment_date")
-        if hasattr(d, "date"):
-            d = d.date()
-        if d is not None:
+        d = _as_date(r.get("assignment_date"))
+        if d in dates:
             lookup[d] = bool(r.get("completed", False))
 
-    values = [1 if lookup.get(d, False) else 0 for d in dates]
     labels = [d.strftime("%a") for d in dates]
-    colours = [_C_GREEN if v else _C_MUTED for v in values]
+    assigned_positions = [i for i, day in enumerate(dates) if day in lookup]
+    values = [1 if lookup[dates[i]] else 0.35 for i in assigned_positions]
+    colours = [_C_GREEN if lookup[dates[i]] else _C_MUTED for i in assigned_positions]
 
-    axis.bar(labels, values, color=colours, width=0.5, zorder=2)
+    bars = axis.bar(
+        [labels[i] for i in assigned_positions],
+        values,
+        color=colours,
+        width=0.5,
+        zorder=2,
+    )
+    for bar, position in zip(bars, assigned_positions):
+        status = "Done" if lookup[dates[position]] else "Not done"
+        axis.annotate(
+            status,
+            (bar.get_x() + bar.get_width() / 2, bar.get_height()),
+            xytext=(0, 4),
+            textcoords="offset points",
+            ha="center",
+            va="bottom",
+            fontsize=7,
+            color=MUTED_TEXT,
+        )
     axis.set_ylim(0, 1.4)
-    axis.set_yticks([0, 1])
-    axis.set_yticklabels(["—", "Done"])
+    axis.set_yticks([0.35, 1])
+    axis.set_yticklabels(["Not done", "Done"])
+    axis.set_ylabel("Assigned workout")
     axis.grid(axis="y", alpha=_GRID_A, zorder=1)
+    axis.text(
+        0.5, -0.2, "No bar means no workout was assigned.",
+        transform=axis.transAxes, ha="center", va="top",
+        color=MUTED_TEXT, fontsize=8,
+    )
 
     figure.tight_layout(pad=1.0)
     return _embed(figure, parent)
@@ -120,31 +150,33 @@ def create_weight_chart(parent, records):
         d = r.get("tracking_date")
         if w is None or d is None:
             continue
-        if hasattr(d, "date"):
-            d = d.date()
         try:
-            valid.append((d, float(w)))
+            weight = float(w)
+            if math.isfinite(weight) and weight > 0:
+                valid.append((_as_date(d), weight))
         except (ValueError, TypeError):
             continue
 
     valid.sort(key=lambda x: x[0])
 
     if valid:
-        labels  = [item[0].strftime("%d %b") for item in valid]
+        dates = [item[0] for item in valid]
         weights = [item[1] for item in valid]
 
-        axis.plot(labels, weights, marker="o", linewidth=2,
+        axis.plot(dates, weights, marker="o", linewidth=2,
                   color=_C_BROWN, markerfacecolor=_C_TAN, markersize=5, zorder=3)
-        axis.fill_between(
-            range(len(labels)), weights,
-            alpha=0.08, color=_C_BROWN,
-        )
+        axis.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
         axis.set_ylabel("Weight (kg)", labelpad=8)
         axis.grid(axis="y", alpha=_GRID_A, zorder=1)
-
-        # Rotate labels if many points
-        if len(labels) > 7:
-            axis.set_xticklabels(labels, rotation=30, ha="right")
+        axis.annotate(
+            f"{weights[-1]:.1f} kg",
+            (dates[-1], weights[-1]),
+            xytext=(6, 6),
+            textcoords="offset points",
+            fontsize=8,
+            color=_C_BROWN,
+        )
+        figure.autofmt_xdate(rotation=30, ha="right")
     else:
         _empty_message(axis, "No weight data recorded yet.")
 
@@ -162,57 +194,60 @@ def create_daily_metrics_chart(parent, records):
 
     records: list of dicts with keys:  tracking_date, water_ml, steps, sleep_hours
     """
-    figure = Figure(figsize=(6.5, 2.8), dpi=100)
-    axis   = figure.add_subplot(111)
-    _apply_chart_style(figure, axis)
+    figure = Figure(figsize=(6.5, 4.5), dpi=100)
+    axes = figure.subplots(3, 1, sharex=True)
+    for axis in axes:
+        _apply_chart_style(figure, axis)
 
-    recent = records[-7:] if records else []
+    today = date.today()
+    dates = [today - timedelta(days=i) for i in range(6, -1, -1)]
+    day_lookup = {}
+    for record in records:
+        record_date = _as_date(record.get("tracking_date"))
+        if record_date in dates:
+            day_lookup[record_date] = record
 
-    if not recent:
-        _empty_message(axis, "No daily tracking data yet.")
+    if not day_lookup:
+        _empty_message(axes[1], "No daily tracking data yet.")
     else:
-        labels = []
-        water  = []
-        steps  = []
-        sleep  = []
-
-        for r in recent:
-            d = r.get("tracking_date")
-            if hasattr(d, "date"):
-                d = d.date()
-            labels.append(d.strftime("%a") if d else "—")
-            water.append(float(r.get("water_ml",    0) or 0))
-            steps.append(float(r.get("steps",        0) or 0))
-            sleep.append(float(r.get("sleep_hours",  0) or 0))
-
-        x = range(len(labels))
-
-        ax2 = axis.twinx()
-        ax2.set_facecolor(CARD_COLOR)
-        ax2.spines["top"].set_visible(False)
-        ax2.spines["right"].set_color(BORDER_COLOR)
-        ax2.tick_params(colors=MUTED_TEXT, labelsize=8)
-
-        axis.plot(x, water, marker="o", linewidth=2,
-                  color=_C_GREEN,  label="Water (ml)", markersize=4, zorder=3)
-        axis.plot(x, sleep, marker="s", linewidth=2,
-                  color=_C_BROWN,  label="Sleep (hrs)", markersize=4, zorder=3)
-        ax2.plot(x, steps, marker="^", linewidth=2, linestyle="--",
-                 color=_C_SAGE,   label="Steps", markersize=4, zorder=3)
-
-        axis.set_xticks(list(x))
-        axis.set_xticklabels(labels)
-        axis.set_ylabel("Water / Sleep", labelpad=8)
-        ax2.set_ylabel("Steps", labelpad=8)
-        axis.grid(axis="y", alpha=_GRID_A, zorder=1)
-
-        # Combine legends
-        lines1, labels1 = axis.get_legend_handles_labels()
-        lines2, labels2 = ax2.get_legend_handles_labels()
-        axis.legend(
-            lines1 + lines2, labels1 + labels2,
-            fontsize=7, frameon=False, loc="upper left",
+        series = (
+            ("water_ml", "Water (ml)", _C_GREEN, "o"),
+            ("steps", "Steps", _C_SAGE, "^"),
+            ("sleep_hours", "Sleep (hours)", _C_BROWN, "s"),
         )
+        labels = [day.strftime("%a %d") for day in dates]
+        x_values = list(range(len(dates)))
+        for axis, (key, label, color, marker) in zip(axes, series):
+            values = []
+            for day in dates:
+                record = day_lookup.get(day)
+                value = record.get(key) if record else None
+                try:
+                    number = float(value) if value is not None else math.nan
+                except (ValueError, TypeError):
+                    number = math.nan
+                values.append(number if math.isfinite(number) and number >= 0 else math.nan)
+
+            axis.plot(
+                x_values, values, marker=marker, linewidth=2,
+                color=color, markersize=4, zorder=3,
+            )
+            for x_value, value in zip(x_values, values):
+                if math.isfinite(value):
+                    axis.annotate(
+                        f"{value:,.0f}" if key != "sleep_hours" else f"{value:.1f}",
+                        (x_value, value),
+                        xytext=(0, 5),
+                        textcoords="offset points",
+                        ha="center",
+                        fontsize=7,
+                        color=color,
+                    )
+            axis.set_ylabel(label, labelpad=8)
+            axis.grid(axis="y", alpha=_GRID_A, zorder=1)
+            axis.set_xticks(x_values)
+
+        axes[-1].set_xticklabels(labels)
 
     figure.tight_layout(pad=1.0)
     return _embed(figure, parent)
@@ -237,29 +272,39 @@ def create_goal_progress_chart(parent, progress_records):
     valid = []
     for r in progress_records:
         d = r.get("progress_date")
-        # Support both key names
-        v = r.get("progress_percentage") or r.get("progress_value")
+        v = r.get("progress_percentage")
+        if v is None:
+            v = r.get("progress_value")
         if d is None or v is None:
             continue
-        if hasattr(d, "date"):
-            d = d.date()
         try:
-            valid.append((d, float(v)))
+            value = float(v)
+            if math.isfinite(value):
+                valid.append((_as_date(d), max(0.0, min(100.0, value))))
         except (ValueError, TypeError):
             continue
 
     valid.sort(key=lambda x: x[0])
 
     if valid:
-        labels = [item[0].strftime("%d %b") for item in valid]
+        dates = [item[0] for item in valid]
         values = [item[1] for item in valid]
 
-        axis.plot(labels, values, marker="o", linewidth=2,
+        axis.plot(dates, values, marker="o", linewidth=2,
                   color=_C_GREEN, markerfacecolor=_C_SAGE, markersize=5, zorder=3)
-        axis.fill_between(range(len(labels)), values, alpha=0.08, color=_C_GREEN)
-        axis.set_ylim(0, 105)
+        axis.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
+        axis.set_ylim(0, 100)
         axis.set_ylabel("Progress (%)", labelpad=8)
         axis.grid(axis="y", alpha=_GRID_A, zorder=1)
+        axis.annotate(
+            f"{values[-1]:.0f}%",
+            (dates[-1], values[-1]),
+            xytext=(6, 6),
+            textcoords="offset points",
+            fontsize=8,
+            color=_C_GREEN,
+        )
+        figure.autofmt_xdate(rotation=30, ha="right")
     else:
         _empty_message(axis, "No goal progress recorded yet.")
 
@@ -281,9 +326,13 @@ def create_goal_pie_chart(parent, goal_name="Long-Term Goal", progress_percentag
     axis.set_facecolor(CARD_COLOR)
 
     try:
-        pct = max(0.0, min(100.0, float(progress_percentage or 0)))
+        pct = float(progress_percentage or 0)
     except (ValueError, TypeError):
         pct = 0.0
+    if not math.isfinite(pct):
+        pct = 0.0
+    else:
+        pct = max(0.0, min(100.0, pct))
 
     rem = max(0.0, 100.0 - pct)
 

@@ -2,13 +2,13 @@
 # Vital Forge — Application screens and navigation.
 
 import datetime
-import os
 import random
 import tkinter as tk
 from tkinter import messagebox, ttk
 
 from config import (
     APP_NAME,
+    FONT_FAMILY,
     BG_COLOR, CARD_COLOR, INPUT_COLOR,
     GREEN, DARK_GREEN, LIGHT_GREEN,
     BROWN, DARK_BROWN, LIGHT_BROWN,
@@ -19,7 +19,7 @@ from config import (
     FONT_PAGE_TITLE, FONT_TITLE,
     SPACING_4, SPACING_8, SPACING_16, SPACING_24, SPACING_32, SPACING_40,
     PAGE_PAD, CARD_PAD, FIELD_GAP, LABEL_GAP, SECTION_GAP,
-    DEMO_EMAIL, DEMO_PASSWORD,
+    DEMO_EMAIL, DEMO_PASSWORD, resource_path,
 )
 
 from data import (
@@ -32,7 +32,7 @@ from utils import (
     hash_password, verify_password,
     is_valid_email, is_valid_password, is_valid_name,
     get_goal_description, clear_frame,
-    get_rounded_image, center_toplevel,
+    get_rounded_image, center_toplevel, calculate_bmi, get_bmi_category,
 )
 
 from ui_components import (
@@ -100,7 +100,7 @@ class VitalForgeApp:
         """Retrieve or cache a rounded Tkinter photo logo."""
         key = (size, radius)
         if key not in self._image_cache:
-            logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "logo.png")
+            logo_path = resource_path("assets/logo.png")
             self._image_cache[key] = get_rounded_image(logo_path, size=size, radius=radius)
         return self._image_cache[key]
 
@@ -155,7 +155,7 @@ class VitalForgeApp:
         else:
             tk.Label(
                 inner, text="🌿", bg=CARD_COLOR, fg=GREEN,
-                font=("Segoe UI", 28),
+                font=(FONT_FAMILY, 28),
             ).pack(pady=(0, SPACING_4))
 
         create_title(inner, APP_NAME, bg=CARD_COLOR).pack(anchor="center")
@@ -700,25 +700,19 @@ class VitalForgeApp:
         water = today_data.get("water_ml", 0) or 0
         steps = today_data.get("steps",    0) or 0
         sleep = today_data.get("sleep_hours", 0) or 0
-        w_kg  = float(today_data.get("weight_kg") or self.profile.get("weight_kg", 70) or 70)
-        h_cm  = float(self.profile.get("height_cm", 170) or 170)
-
-        # BMI Calculation
-        h_m = h_cm / 100.0
-        bmi = w_kg / (h_m * h_m) if h_m > 0 else 0.0
-
-        if bmi < 18.5:
-            bmi_cat = "Underweight"
-            bmi_color = WARNING_COLOR
-        elif 18.5 <= bmi < 25.0:
-            bmi_cat = "Normal Weight"
-            bmi_color = SUCCESS_COLOR
-        elif 25.0 <= bmi < 30.0:
-            bmi_cat = "Overweight"
-            bmi_color = BROWN
-        else:
-            bmi_cat = "Obese"
-            bmi_color = ERROR_COLOR
+        tracked_weight = today_data.get("weight_kg") or self.profile.get("weight_kg")
+        bmi_weight = self.profile.get("weight_kg") or tracked_weight
+        h_cm = self.profile.get("height_cm")
+        bmi = calculate_bmi(bmi_weight, h_cm)
+        bmi_cat = get_bmi_category(bmi)
+        bmi_color = (
+            WARNING_COLOR if bmi_cat == "Underweight"
+            else SUCCESS_COLOR if bmi_cat == "Normal Weight"
+            else BROWN if bmi_cat == "Overweight"
+            else ERROR_COLOR if bmi_cat == "Obese"
+            else MUTED_TEXT
+        )
+        bmi_status = bmi_cat
 
         wg = self.profile.get("water_goal_ml", DEFAULT_WATER_GOAL)
         sg = self.profile.get("steps_goal", DEFAULT_STEPS_GOAL)
@@ -754,9 +748,8 @@ class VitalForgeApp:
 
         StatCard(
             stat_row, "BMI",
-            f"{bmi:.1f} kg/m²",
-            f"Status: {bmi_cat}",
-            progress=min(1.0, bmi / 30.0),
+            f"{bmi:.1f} kg/m²" if bmi is not None else "—",
+            f"Status: {bmi_status}",
             accent=bmi_color,
         ).grid(row=0, column=3, sticky="nsew", padx=(SPACING_4, 0))
 
@@ -770,7 +763,7 @@ class VitalForgeApp:
         water_var  = tk.StringVar(value=str(int(water)))
         steps_var  = tk.StringVar(value=str(int(steps)))
         sleep_var  = tk.StringVar(value=str(sleep))
-        weight_var = tk.StringVar(value=str(w_kg))
+        weight_var = tk.StringVar(value=str(tracked_weight))
 
         def _track_row(parent, label, var, unit=""):
             row = tk.Frame(parent, bg=CARD_COLOR)
@@ -1137,12 +1130,6 @@ class VitalForgeApp:
                     queries.complete_workout(self.user_id, target_date, completed=done)
             except Exception as e:
                 self.show_error("Workout Error", str(e))
-                if self.demo_mode:
-                    self.demo_workout_history[str(today)]["completed"] = done
-                else:
-                    queries.complete_workout(self.user_id, today, completed=done)
-            except Exception as e:
-                self.show_error("Workout Error", str(e))
 
         for index, exercise_name in enumerate(workout["exercises"], start=1):
             variable = tk.BooleanVar(value=checked.get(index, False))
@@ -1406,7 +1393,7 @@ class VitalForgeApp:
 
                 del_btn = tk.Button(
                     row, text="🗑", bg=CARD_COLOR, fg=ERROR_COLOR,
-                    font=("Segoe UI", 10), bd=0, cursor="hand2",
+                    font=(FONT_FAMILY, 10), bd=0, cursor="hand2",
                     command=_delete_item,
                 )
                 del_btn.pack(side="right", padx=(SPACING_4, 0))
@@ -1502,12 +1489,25 @@ class VitalForgeApp:
 
         hdr = tk.Frame(page, bg=BG_COLOR)
         hdr.pack(fill="x", padx=PAGE_PAD, pady=(SPACING_32, SPACING_8))
-        create_page_title(hdr, "Progress").pack(anchor="w")
-        create_muted_label(hdr, "See how your habits are developing over time.").pack(anchor="w", pady=(SPACING_4, 0))
+        heading = tk.Frame(hdr, bg=BG_COLOR)
+        heading.pack(side="left", fill="x", expand=True)
+        create_page_title(heading, "Progress").pack(anchor="w")
+        create_muted_label(
+            heading,
+            f"Live data · Updated {datetime.datetime.now():%I:%M:%S %p}",
+        ).pack(anchor="w", pady=(SPACING_4, 0))
+        VFButton(
+            hdr,
+            "Refresh",
+            command=self.show_progress,
+            style="secondary",
+        ).pack(side="right")
 
         if self.demo_mode:
             tracking = self._demo_tracking_history()
             workouts = self._demo_workout_history()
+            progress_records = self._demo_goal_progress()
+            progress_error = None
         else:
             try:
                 tracking = queries.get_tracking_history(self.user_id, 30)
@@ -1515,6 +1515,12 @@ class VitalForgeApp:
             except Exception as e:
                 create_muted_label(page, f"Error loading progress data: {e}").pack(padx=PAGE_PAD)
                 return
+            try:
+                progress_records = queries.get_goal_progress(self.user_id, 30)
+                progress_error = None
+            except Exception as e:
+                progress_records = []
+                progress_error = e
 
         def chart_card(title):
             c = Card(page, padding=SPACING_24)
@@ -1554,12 +1560,24 @@ class VitalForgeApp:
         goal_name = self.profile.get("long_term_goal", "General fitness")
         
         try:
+            if progress_error is not None:
+                raise progress_error
             if self.demo_mode:
-                demo_prog = self._demo_goal_progress()
-                cur_pct = getattr(self, "_custom_demo_goal_pct", float(demo_prog[-1]["progress_value"]) if demo_prog else 0.0)
+                cur_pct = getattr(
+                    self,
+                    "_custom_demo_goal_pct",
+                    float(progress_records[-1]["progress_value"]) if progress_records else 0.0,
+                )
             else:
-                p_recs = queries.get_goal_progress(self.user_id, 30)
-                cur_pct = float(p_recs[-1].get("progress_percentage") or p_recs[-1].get("progress_value") or 0.0) if p_recs else 0.0
+                cur_pct = (
+                    float(
+                        progress_records[-1].get("progress_percentage")
+                        if progress_records[-1].get("progress_percentage") is not None
+                        else progress_records[-1].get("progress_value") or 0.0
+                    )
+                    if progress_records
+                    else 0.0
+                )
 
             create_goal_pie_chart(pie_inner, goal_name, cur_pct)
         except Exception as e:
@@ -1568,12 +1586,9 @@ class VitalForgeApp:
         # Goal progress chart
         gpc = chart_card("Long-Term Goal Progress Trend")
         try:
-            prog_data = (
-                self._demo_goal_progress()
-                if self.demo_mode
-                else queries.get_goal_progress(self.user_id, 30)
-            )
-            create_goal_progress_chart(gpc, prog_data)
+            if progress_error is not None:
+                raise progress_error
+            create_goal_progress_chart(gpc, progress_records)
         except Exception as e:
             create_muted_label(gpc, f"Chart unavailable: {e}", bg=CARD_COLOR).pack()
 
@@ -1613,13 +1628,16 @@ class VitalForgeApp:
 
     def _demo_goal_progress(self):
         today = datetime.date.today()
-        return [
+        records = [
             {
                 "progress_date":  today - datetime.timedelta(days=6 - i),
                 "progress_value": 15 + i * 12,
             }
             for i in range(7)
         ]
+        if hasattr(self, "_custom_demo_goal_pct"):
+            records[-1]["progress_value"] = self._custom_demo_goal_pct
+        return records
 
     # ─────────────────────────────────────────────────────
     # PROFILE
