@@ -1,0 +1,133 @@
+name: Build desktop distributions
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-macos:
+    runs-on: macos-15-intel
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Build macOS application
+        run: |
+          : > .env
+          python -m PyInstaller --noconfirm --clean VitalForge.spec
+          test -d dist/VitalForge.app
+          tar -czf "$RUNNER_TEMP/VitalForge-macos.tar.gz" -C dist VitalForge.app
+
+      - name: Upload macOS application
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-app
+          path: ${{ runner.temp }}/VitalForge-macos.tar.gz
+          if-no-files-found: error
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Linux packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes desktop-file-utils file patchelf
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Install linuxdeploy and appimagetool
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl --fail --location --retry 3 \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage \
+            --output "$HOME/.local/bin/linuxdeploy"
+          curl --fail --location --retry 3 \
+            https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage \
+            --output "$HOME/.local/bin/appimagetool"
+          chmod +x "$HOME/.local/bin/linuxdeploy" "$HOME/.local/bin/appimagetool"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Build Debian and AppImage packages
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: |
+          : > .env
+          sh packaging/linux/build.sh all
+          test -n "$(find dist/packages -maxdepth 1 -name '*.deb' -print -quit)"
+          test -n "$(find dist/packages -maxdepth 1 -name '*.AppImage' -print -quit)"
+
+      - name: Upload Linux packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            dist/packages/*.deb
+            dist/packages/*.AppImage
+          if-no-files-found: error
+
+  commit-distributions:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs:
+      - build-macos
+      - build-linux
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download macOS application
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-app
+          path: artifacts/macos
+
+      - name: Extract macOS application
+        run: tar -xzf artifacts/macos/VitalForge-macos.tar.gz -C dist
+
+      - name: Download Linux packages
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-packages
+          path: dist/packages
+
+      - name: Make AppImage executable
+        run: chmod +x dist/packages/*.AppImage
+
+      - name: Commit distributions to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --force dist/VitalForge.app dist/packages/*.deb dist/packages/*.AppImage
+          if git diff --cached --quiet; then
+            echo "No distribution changes to commit."
+          else
+            git commit -m "Build desktop distributions"
+            git push origin HEAD:main
+          fi

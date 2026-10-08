@@ -93,6 +93,14 @@ between operating systems, so Windows, macOS, and Linux packages must each be
 built on that operating system. The build uses the platform's bundled logo and
 includes the local `.env` in the package. It is not encrypted.
 
+The GitHub Actions workflow builds the macOS `.app`, Debian `.deb`, and Linux
+`.AppImage` on GitHub-hosted runners. It uploads the packages for pushes and
+pull requests targeting `main`; after a push to `main`, it also adds the
+generated outputs under `dist/` to a follow-up commit. GitHub no longer offers
+the requested `macos-13` hosted label, so the workflow uses the supported
+`macos-15-intel` runner. It uses an empty `.env` placeholder, not repository
+configuration, for these builds.
+
 ### Windows
 
 The Windows build was rebuilt and verified in this workspace. To rebuild on
@@ -107,8 +115,9 @@ The single-file executable is created at `dist/VitalForge.exe`.
 
 ### macOS
 
-The macOS build configuration is present but has not been built or verified on
-a Mac. Build it on macOS after installing the Python dependencies:
+The GitHub Actions workflow builds the macOS application on GitHub's
+`macos-15-intel` runner. To build it manually on macOS after installing the
+Python dependencies:
 
 ```bash
 python3 -m pip install -r requirements.txt
