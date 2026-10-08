@@ -87,12 +87,12 @@ Package: vitalforge
 Version: $VERSION
 Section: utils
 Priority: optional
-Architecture: $(dpkg-deb --print-architecture)
+Architecture: $(dpkg --print-architecture)
 Maintainer: Vital Forge Team
 Description: Desktop fitness tracking application
 EOF
     dpkg-deb --root-owner-group --build \
-        "$DEB_ROOT" "$ROOT/dist/packages/vitalforge_${VERSION}_$(dpkg-deb --print-architecture).deb"
+        "$DEB_ROOT" "$ROOT/dist/packages/vitalforge_${VERSION}_$(dpkg --print-architecture).deb"
     rm -rf "$DEB_ROOT"
     trap - EXIT HUP INT TERM
 fi
